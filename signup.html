@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Account</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+
+<div class="w-full max-w-md bg-slate-900/70 backdrop-blur-lg p-8 rounded-2xl shadow-2xl border border-slate-700">
+
+  <h2 class="text-3xl font-bold text-center text-white mb-6">
+    Create Account
+  </h2>
+
+  {% if error %}
+  <p class="text-red-500 text-center mb-4 font-semibold">{{ error }}</p>
+  {% endif %}
+
+  <form method="POST" class="space-y-4">
+
+    <input type="text" name="username"
+           placeholder="Email or 10-digit Mobile"
+           class="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+           required>
+
+    <input type="password" name="password"
+           placeholder="Password (8+ chars, Uppercase, Lowercase, Number)"
+           class="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+           required>
+
+    <input type="password" name="confirm_password"
+           placeholder="Confirm Password"
+           class="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+           required>
+
+    <button type="submit"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition duration-300">
+      Signup
+    </button>
+  </form>
+
+  <p class="text-center text-gray-400 mt-6">
+    Already have an account?
+    <a href="/" class="text-indigo-400 hover:underline">Login</a>
+  </p>
+
+</div>
+
+</body>
+</html>
