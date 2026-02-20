@@ -2,10 +2,16 @@ from flask import Flask, render_template, request, redirect, url_for, session
 import pickle
 import re
 import sqlite3
+import random
+import smtplib
+from email.mime.text import MIMEText
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+# prefer using an environment variable for the secret key in production
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "supersecretkey")
+
 
 # ================= DATABASE SETUP =================
 def init_db():
@@ -23,17 +29,50 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 # ================= LOAD MODEL =================
 vectorizer = pickle.load(open("vectorizer_updated1.pkl", "rb"))
 model = pickle.load(open("phishing_updated1.pkl", "rb"))
 
-# STORE DETECTION HISTORY
-history = []
+
+# per-user history and OTP storage
+history = {}
+otp_storage = {}
 
 
-# ================= LOGIN PAGE =================
+# ================= EMAIL OTP FUNCTION =================
+def send_otp_email(to_email, otp):
+    sender_email = os.environ.get("SENDER_EMAIL")
+    sender_password = os.environ.get("EMAIL_APP_PASSWORD")
+
+    if not sender_email or not sender_password:
+        print("Email not sent: SENDER_EMAIL or EMAIL_APP_PASSWORD not set in environment")
+        return False
+
+    subject = "Your OTP Verification Code"
+    body = f"Your OTP is: {otp}"
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print("Email Error:", e)
+        return False
+
+
+# ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -55,7 +94,7 @@ def login():
     return render_template("login.html")
 
 
-# ================= SIGNUP PAGE =================
+# ================= SIGNUP (email OTP) =================
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
@@ -64,24 +103,40 @@ def signup():
         confirm_password = request.form["confirm_password"]
 
         email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-        mobile_pattern = r'^\d{10}$'
         password_pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$'
 
-        # Username validation
-        if not (re.match(email_pattern, username) or re.match(mobile_pattern, username)):
-            return render_template("signup.html",
-                                   error="Enter valid Email or 10-digit Mobile")
+        if not re.match(email_pattern, username):
+            return render_template("signup.html", error="Enter a valid email")
 
-        # Password match
         if password != confirm_password:
-            return render_template("signup.html",
-                                   error="Passwords do not match")
+            return render_template("signup.html", error="Passwords do not match")
 
-        # Password strength
         if not re.match(password_pattern, password):
-            return render_template("signup.html",
-                                   error="Password must be 8+ chars with Uppercase, Lowercase & Number")
+            return render_template("signup.html", error="Password must be 8+ chars with Uppercase, Lowercase & Number")
 
+        otp = random.randint(100000, 999999)
+
+        otp_storage[username] = {
+            "otp": str(otp),
+            "password": password
+        }
+
+        send_otp_email(username, otp)
+
+        return render_template("verify_otp.html", username=username)
+
+    return render_template("signup.html")
+
+
+# ================= VERIFY OTP =================
+@app.route("/verify_otp", methods=["POST"])
+def verify_otp():
+    username = request.form["username"]
+    entered_otp = request.form["otp"]
+
+    if username in otp_storage and otp_storage[username]["otp"] == entered_otp:
+
+        password = otp_storage[username]["password"]
         hashed_password = generate_password_hash(password)
 
         try:
@@ -92,16 +147,17 @@ def signup():
             conn.commit()
             conn.close()
 
+            otp_storage.pop(username, None)
+
             return redirect(url_for("login"))
 
-        except:
-            return render_template("signup.html",
-                                   error="Account already exists")
+        except Exception:
+            return render_template("signup.html", error="Account already exists")
 
-    return render_template("signup.html")
+    return render_template("verify_otp.html", username=username, error="Invalid OTP")
 
 
-# ================= HOME PAGE =================
+# ================= HOME =================
 @app.route("/home", methods=["GET", "POST"])
 def home():
 
@@ -118,16 +174,16 @@ def home():
         pred = model.predict(features)[0]
 
         if pred == 1 or pred == "bad":
-            result = "⚠️ Security Alert: This website may be unsafe or fraudulent"
-        elif pred == 0 or pred == "good":
-            result = "✅ No phishing indicators detected — website is secure"
+            result = "⚠️ Website may be unsafe"
         else:
-            result = "⚠️ Unable to classify the website"
+            result = "✅ Website is secure"
 
-        history.append({
-            "url": url,
-            "result": result
-        })
+        user = session["user"]
+
+        if user not in history:
+            history[user] = []
+
+        history[user].append({"url": cleaned_url, "result": result})
 
     return render_template("index.html", predict=result)
 
@@ -135,9 +191,14 @@ def home():
 # ================= DETECTION HISTORY =================
 @app.route("/detection")
 def detection():
+
     if "user" not in session:
         return redirect(url_for("login"))
-    return render_template("detection.html", history=history)
+
+    user = session["user"]
+    user_history = history.get(user, [])
+
+    return render_template("detection.html", history=user_history)
 
 
 # ================= ABOUT PAGE =================
@@ -145,7 +206,9 @@ def detection():
 def about():
     if "user" not in session:
         return redirect(url_for("login"))
-    return render_template("about.html")
+    user = session["user"]
+    user_history = history.get(user, [])
+    return render_template("about.html", history=user_history)
 
 
 # ================= LOGOUT =================
@@ -155,6 +218,5 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ================= RUN APP =================
 if __name__ == "__main__":
     app.run(debug=True)

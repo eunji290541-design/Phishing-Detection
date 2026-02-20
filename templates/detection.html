@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Detection History</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<h2 style="text-align:center;">Detection History</h2>
+
+<div style="max-width:800px;margin:auto;">
+  {% if history %}
+    {% for item in history %}
+      <div style="margin:15px 0;padding:15px;border:1px solid #334155;border-radius:8px;">
+        <p><strong>URL:</strong> 
+          <a href="http://{{ item.url }}" target="_blank">{{ item.url }}</a>
+        </p>
+        <p><strong>Result:</strong> {{ item.result }}</p>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p style="text-align:center;">No detection history available.</p>
+  {% endif %}
+</div>
+
+</body>
+</html>

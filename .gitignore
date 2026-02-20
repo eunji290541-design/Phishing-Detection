@@ -1,0 +1,17 @@
+env/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+env/
+env\
+*.egg-info/
+dist/
+.ipynb_checkpoints/
+*.log
+*.sqlite3
+.DS_Store
+ENV/
+/.env
+/.venv
