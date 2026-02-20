@@ -202,13 +202,13 @@ def detection():
 
 
 # # ================= ABOUT PAGE =================
-# @app.route("/about")
-# def about():
-#     if "user" not in session:
-#         return redirect(url_for("login"))
-#     user = session["user"]
-#     user_history = history.get(user, [])
-#     return render_template("about.html", history=user_history)
+@app.route("/about")
+def about():
+    if "user" not in session:
+        return redirect(url_for("login"))
+    user = session["user"]
+    user_history = history.get(user, [])
+    return render_template("about.html", history=user_history)
 
 
 # ================= LOGOUT =================
